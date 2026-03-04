@@ -3,7 +3,7 @@ import {
   ShieldCheck, Gamepad2, Wallet, ListOrdered, Home, Search, Bell, User,
   ChevronRight, AlertCircle, MessageSquare, CheckCircle2, Clock, Ticket,
   Smartphone, Sparkles, Bot, Loader2, ArrowUpRight, ArrowDownLeft,
-  PlusCircle, ArrowDownToLine, History
+  PlusCircle, ArrowDownToLine, History, Building
 } from 'lucide-react';
 
 // --- MOCK DATA ---
@@ -54,6 +54,25 @@ const PAYMENT_METHODS = [
   { id: 'ovo', name: 'OVO', icon: 'Smartphone', fee: 1000 },
   { id: 'dana', name: 'DANA', icon: 'Smartphone', fee: 1000 },
   { id: 'shopeepay', name: 'ShopeePay', icon: 'Smartphone', fee: 0 },
+];
+
+const TOPUP_METHODS = [
+  { id: 'bca', name: 'BCA Virtual Account', type: 'Bank' },
+  { id: 'mandiri', name: 'Mandiri Virtual Account', type: 'Bank' },
+  { id: 'bri', name: 'BRI Virtual Account', type: 'Bank' },
+  { id: 'bni', name: 'BNI Virtual Account', type: 'Bank' },
+  { id: 'other_bank', name: 'Transfer Bank Lainnya', type: 'Bank' },
+  { id: 'gopay', name: 'GoPay', type: 'E-Money' },
+  { id: 'ovo', name: 'OVO', type: 'E-Money' },
+  { id: 'dana', name: 'DANA', type: 'E-Money' },
+  { id: 'shopeepay', name: 'ShopeePay', type: 'E-Money' },
+];
+
+const WITHDRAW_METHODS = [
+  { id: 'gopay', name: 'GoPay', type: 'E-Money' },
+  { id: 'ovo', name: 'OVO', type: 'E-Money' },
+  { id: 'dana', name: 'DANA', type: 'E-Money' },
+  { id: 'shopeepay', name: 'ShopeePay', type: 'E-Money' },
 ];
 
 // --- GEMINI API HELPER ---
@@ -107,10 +126,19 @@ export default function App() {
     { id: 'TRX-1001', type: 'credit', title: 'Top Up Saldo via GoPay', amount: 1050000, date: '25 Feb 2026, 19:20', status: 'success' },
   ]);
   
-  // Checkout Modal State
+  // Modals State
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('wallet');
+
+  // New Modals State
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState('');
+  const [topUpMethod, setTopUpMethod] = useState('bca');
+
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawMethod, setWithdrawMethod] = useState('gopay');
 
   // AI States
   const [aiAnalyses, setAiAnalyses] = useState({});
@@ -155,7 +183,6 @@ export default function App() {
       }
       setWalletBalance(prev => prev - totalPay);
       
-      // Catat mutasi pengeluaran jika bayar pakai wallet
       const newMutation = {
         id: `TRX-${Math.floor(Math.random() * 100000)}`,
         type: 'debit',
@@ -174,7 +201,7 @@ export default function App() {
 
     if (selectedOffer.type === 'Voucher') {
       itemName = selectedOffer.name;
-      status = 'completed'; // Voucher digital biasanya otomatis selesai
+      status = 'completed';
     } else {
       const game = GAMES.find(g => g.id === selectedOffer.gameId);
       itemName = `${selectedOffer.amount} ${game.currency} - ${game.name}`;
@@ -194,6 +221,62 @@ export default function App() {
     setActiveTab('orders');
   };
 
+  const processTopUp = () => {
+    const amount = parseInt(topUpAmount);
+    if (!amount || amount < 10000) {
+      alert('Minimal Top Up adalah Rp10.000');
+      return;
+    }
+
+    const method = TOPUP_METHODS.find(m => m.id === topUpMethod);
+    setWalletBalance(prev => prev + amount);
+
+    const newMutation = {
+      id: `TRX-${Math.floor(Math.random() * 100000)}`,
+      type: 'credit',
+      title: `Top Up Saldo via ${method.name}`,
+      amount: amount,
+      date: 'Baru saja',
+      status: 'success'
+    };
+    
+    setMutations([newMutation, ...mutations]);
+    setIsTopUpOpen(false);
+    setTopUpAmount('');
+    alert(`Berhasil Top Up sebesar ${formatRupiah(amount)} menggunakan ${method.name}`);
+  };
+
+  const processWithdraw = () => {
+    const amount = parseInt(withdrawAmount);
+    if (!amount || amount < 10000) {
+      alert('Minimal Penarikan adalah Rp10.000');
+      return;
+    }
+    if (amount > walletBalance) {
+      alert('Saldo escrow Anda tidak mencukupi untuk penarikan ini.');
+      return;
+    }
+
+    const fee = Math.floor(amount * 0.01); // Potongan 1%
+    const method = WITHDRAW_METHODS.find(m => m.id === withdrawMethod);
+    
+    setWalletBalance(prev => prev - amount);
+
+    const newMutation = {
+      id: `TRX-${Math.floor(Math.random() * 100000)}`,
+      type: 'debit',
+      title: `Penarikan ke ${method.name}`,
+      amount: amount,
+      date: 'Baru saja',
+      status: 'success'
+    };
+    
+    setMutations([newMutation, ...mutations]);
+    setIsWithdrawOpen(false);
+    setWithdrawAmount('');
+    alert(`Berhasil menarik ke ${method.name}. Dana yang ditransfer: ${formatRupiah(amount - fee)} (setelah potongan fee 1% sebesar ${formatRupiah(fee)})`);
+  };
+
   // --- COMPONENTS ---
 
   const Sidebar = () => (
@@ -207,7 +290,7 @@ export default function App() {
         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-6">
           <p className="text-slate-400 text-xs mb-1">Saldo Escrow (IDR)</p>
           <p className="text-white font-bold text-lg">{formatRupiah(walletBalance)}</p>
-          <button className="mt-3 w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 rounded-lg transition">
+          <button onClick={() => setIsTopUpOpen(true)} className="mt-3 w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 rounded-lg transition">
             Top Up
           </button>
         </div>
@@ -329,7 +412,7 @@ Berikan action jika ada item di katalog yang sangat relevan dengan pertanyaan us
         <div className="md:hidden bg-gradient-to-br from-indigo-900 to-slate-800 p-5 rounded-2xl border border-indigo-500/30">
           <p className="text-indigo-200 text-sm mb-1">Total Saldo (IDR)</p>
           <p className="text-white font-bold text-3xl mb-4">{formatRupiah(walletBalance)}</p>
-          <button className="w-full bg-indigo-500 text-white font-medium py-2.5 rounded-xl">
+          <button onClick={() => setIsTopUpOpen(true)} className="w-full bg-indigo-500 text-white font-medium py-2.5 rounded-xl">
             Isi Saldo
           </button>
         </div>
@@ -688,10 +771,10 @@ Berikan action jika ada item di katalog yang sangat relevan dengan pertanyaan us
           </div>
           
           <div className="flex gap-3 mt-2 md:mt-0">
-            <button className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-3 rounded-xl font-bold transition shadow-[0_0_15px_rgba(99,102,241,0.4)]">
+            <button onClick={() => setIsTopUpOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-3 rounded-xl font-bold transition shadow-[0_0_15px_rgba(99,102,241,0.4)]">
               <PlusCircle className="w-5 h-5" /> Top Up
             </button>
-            <button className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-800/80 hover:bg-slate-700 text-white border border-slate-600 px-6 py-3 rounded-xl font-bold transition">
+            <button onClick={() => setIsWithdrawOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-800/80 hover:bg-slate-700 text-white border border-slate-600 px-6 py-3 rounded-xl font-bold transition">
               <ArrowDownToLine className="w-5 h-5" /> Tarik
             </button>
           </div>
@@ -861,6 +944,136 @@ Berikan action jika ada item di katalog yang sangat relevan dengan pertanyaan us
                   className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(79,70,229,0.3)]"
                 >
                   <Wallet className="w-5 h-5" /> Bayar Sekarang
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- TOP UP MODAL --- */}
+        {isTopUpOpen && (
+          <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsTopUpOpen(false)}></div>
+            <div className="bg-slate-900 border border-slate-700 rounded-t-2xl md:rounded-2xl w-full max-w-md relative z-10 animate-in slide-in-from-bottom-4 md:slide-in-from-bottom-8 duration-300">
+              <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-white">Top Up Saldo</h3>
+                <button onClick={() => setIsTopUpOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+              
+              <div className="p-6 space-y-5">
+                <div>
+                  <label className="text-sm font-medium text-slate-300 mb-2 block">Pilih Nominal</label>
+                  <input 
+                    type="number" 
+                    value={topUpAmount}
+                    onChange={(e) => setTopUpAmount(e.target.value)}
+                    placeholder="Contoh: 100000" 
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition"
+                  />
+                  {topUpAmount && (
+                    <p className="text-xs text-indigo-400 mt-2">Diterima: {formatRupiah(parseInt(topUpAmount) || 0)}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-slate-300 mb-2 block">Metode Pembayaran</label>
+                  <select 
+                    value={topUpMethod}
+                    onChange={(e) => setTopUpMethod(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition appearance-none cursor-pointer"
+                  >
+                    <optgroup label="Bank Transfer" className="bg-slate-800 text-white">
+                      {TOPUP_METHODS.filter(m => m.type === 'Bank').map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="E-Money" className="bg-slate-800 text-white">
+                      {TOPUP_METHODS.filter(m => m.type === 'E-Money').map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+
+                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 text-xs text-slate-400 leading-relaxed">
+                  Semua transaksi diproses secara instan (real-time). Pastikan nama metode sesuai dengan aplikasi yang akan Anda gunakan.
+                </div>
+
+                <button 
+                  onClick={processTopUp}
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(79,70,229,0.3)]"
+                >
+                  Lanjut Bayar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- WITHDRAW MODAL --- */}
+        {isWithdrawOpen && (
+          <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsWithdrawOpen(false)}></div>
+            <div className="bg-slate-900 border border-slate-700 rounded-t-2xl md:rounded-2xl w-full max-w-md relative z-10 animate-in slide-in-from-bottom-4 md:slide-in-from-bottom-8 duration-300">
+              <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-white">Tarik Saldo (E-Money)</h3>
+                <button onClick={() => setIsWithdrawOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+              
+              <div className="p-6 space-y-5">
+                <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-xl flex justify-between items-center">
+                  <span className="text-sm text-indigo-200">Saldo Maksimal</span>
+                  <span className="font-bold text-white">{formatRupiah(walletBalance)}</span>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-slate-300 mb-2 block">Nominal Penarikan</label>
+                  <input 
+                    type="number" 
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    placeholder="Contoh: 100000" 
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition"
+                  />
+                  {withdrawAmount && parseInt(withdrawAmount) > 0 && (
+                    <div className="text-xs space-y-1 mt-2 p-3 bg-slate-800/80 rounded-lg border border-slate-700">
+                      <div className="flex justify-between text-slate-400">
+                        <span>Potongan Fee (1%)</span>
+                        <span className="text-rose-400">-{formatRupiah(Math.floor(parseInt(withdrawAmount) * 0.01))}</span>
+                      </div>
+                      <div className="flex justify-between text-white font-bold pt-1 border-t border-slate-700">
+                        <span>Total Diterima</span>
+                        <span className="text-emerald-400">{formatRupiah(parseInt(withdrawAmount) - Math.floor(parseInt(withdrawAmount) * 0.01))}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-slate-300 mb-2 block">Tujuan Penarikan</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {WITHDRAW_METHODS.map(method => (
+                      <button
+                        key={method.id}
+                        onClick={() => setWithdrawMethod(method.id)}
+                        className={`flex items-center gap-2 p-3 rounded-xl border text-sm transition-all ${
+                          withdrawMethod === method.id 
+                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' 
+                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'
+                        }`}
+                      >
+                        <Smartphone className="w-4 h-4" />
+                        <span className="font-medium">{method.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={processWithdraw}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                >
+                  <ArrowDownToLine className="w-5 h-5" /> Tarik Sekarang
                 </button>
               </div>
             </div>
